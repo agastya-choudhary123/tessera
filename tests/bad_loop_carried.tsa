@@ -1,0 +1,20 @@
+; V3, loop-carried. Straight-line inspection of this loop body finds nothing
+; wrong: the ldv precedes the dma.in. The hazard exists only across the back
+; edge, where iteration n+1's read races iteration n's transfer. This is why
+; the verifier iterates the tag dataflow to a fixpoint rather than making a
+; single linear pass.
+.args 6
+  arg r0, 0
+  arg r3, 3
+  arg r5, 5
+  muli r8, r5, 4
+  movi r6, 0
+loop:
+  ldv  v0, spm[0]
+  mopa za0, v0, v0
+  dma.in spm[0], r0, r8, 16, 512, t0, pack16
+  addi r6, r6, 1
+  cmplt r15, r6, r3
+  bnz  r15, loop
+  wait t0
+  halt

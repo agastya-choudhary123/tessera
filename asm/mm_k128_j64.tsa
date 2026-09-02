@@ -1,0 +1,274 @@
+; two-level-blocked matmul: K=128 Jc=64 tiles/panel=2 unroll=4
+; scratchpad  B=32768  A(4 panels)=32768  C(2x)=16384  total=81920/131072B
+; A-panel reuse = 2x  ->  ~32 flops/byte of A traffic
+.args 6
+  arg r0, 0        ; A
+  arg r1, 1        ; B
+  arg r2, 2        ; C
+  arg r3, 3        ; M
+  arg r4, 4        ; N
+  arg r5, 5        ; K
+  muli r8, r5, 4   ; lda
+  muli r9, r4, 4   ; ldb = ldc
+  movi r7, 0       ; j
+j_loop:
+  shli r14, r7, 2
+  add  r14, r14, r1
+  dma.in spm[0], r14, r9, 128, 256, t6      ; B[:, j:j+64] -> resident
+  movi r15, 0
+  mul  r14, r15, r8
+  add  r14, r14, r0
+  dma.in spm[32768], r14, r8, 16, 512, t0, pack16
+  muli r15, r8, 16
+  add  r15, r14, r15
+  dma.in spm[40960], r15, r8, 16, 512, t1, pack16
+  wait 64          ; t6: B must land before any outer product
+  movi r6, 0       ; i
+i_loop:
+  ; ---- half 0: compute from A buffer 0, prefetch into 1 ----
+  addi r15, r6, 32
+  cmplt r14, r15, r3
+  mul  r15, r15, r14      ; clamp the tail prefetch to row-block 0
+  mul  r14, r15, r8
+  add  r14, r14, r0
+  dma.in spm[49152], r14, r8, 16, 512, t2, pack16
+  muli r15, r8, 16
+  add  r15, r14, r15
+  dma.in spm[57344], r15, r8, 16, 512, t3, pack16
+  wait 3           ; both A panels of buffer 0 landed
+  wait 16          ; C staging 0 free
+  ; -- output tile 0 of 2, reusing A buffer 0 --
+  zerza za0
+  zerza za1
+  zerza za2
+  zerza za3
+  movi r10, 32768
+  movi r11, 40960
+  movi r12, 0
+  movi r13, 40960
+k_0_0:
+  ldv  v0,   spm[0+r10]
+  ldv  v1, spm[0+r11]
+  ldv  v2, spm[0+r12]
+  ldv  v3, spm[64+r12]
+  ldv  v4,   spm[64+r10]
+  ldv  v5, spm[64+r11]
+  ldv  v6, spm[256+r12]
+  ldv  v7, spm[320+r12]
+  ldv  v8,   spm[128+r10]
+  ldv  v9, spm[128+r11]
+  ldv  v10, spm[512+r12]
+  ldv  v11, spm[576+r12]
+  ldv  v12,   spm[192+r10]
+  ldv  v13, spm[192+r11]
+  ldv  v14, spm[768+r12]
+  ldv  v15, spm[832+r12]
+  mopa za0, v0,   v2
+  mopa za1, v0,   v3
+  mopa za2, v1, v2
+  mopa za3, v1, v3
+  mopa za0, v4,   v6
+  mopa za1, v4,   v7
+  mopa za2, v5, v6
+  mopa za3, v5, v7
+  mopa za0, v8,   v10
+  mopa za1, v8,   v11
+  mopa za2, v9, v10
+  mopa za3, v9, v11
+  mopa za0, v12,   v14
+  mopa za1, v12,   v15
+  mopa za2, v13, v14
+  mopa za3, v13, v15
+  addi r10, r10, 256
+  addi r11, r11, 256
+  addi r12, r12, 1024
+  cmplt r15, r10, r13
+  bnz  r15, k_0_0
+  stza spm[65536], za0, 256
+  stza spm[65600], za1, 256
+  stza spm[69632], za2, 256
+  stza spm[69696], za3, 256
+  ; -- output tile 1 of 2, reusing A buffer 0 --
+  zerza za0
+  zerza za1
+  zerza za2
+  zerza za3
+  movi r10, 32768
+  movi r11, 40960
+  movi r12, 128
+  movi r13, 40960
+k_0_1:
+  ldv  v0,   spm[0+r10]
+  ldv  v1, spm[0+r11]
+  ldv  v2, spm[0+r12]
+  ldv  v3, spm[64+r12]
+  ldv  v4,   spm[64+r10]
+  ldv  v5, spm[64+r11]
+  ldv  v6, spm[256+r12]
+  ldv  v7, spm[320+r12]
+  ldv  v8,   spm[128+r10]
+  ldv  v9, spm[128+r11]
+  ldv  v10, spm[512+r12]
+  ldv  v11, spm[576+r12]
+  ldv  v12,   spm[192+r10]
+  ldv  v13, spm[192+r11]
+  ldv  v14, spm[768+r12]
+  ldv  v15, spm[832+r12]
+  mopa za0, v0,   v2
+  mopa za1, v0,   v3
+  mopa za2, v1, v2
+  mopa za3, v1, v3
+  mopa za0, v4,   v6
+  mopa za1, v4,   v7
+  mopa za2, v5, v6
+  mopa za3, v5, v7
+  mopa za0, v8,   v10
+  mopa za1, v8,   v11
+  mopa za2, v9, v10
+  mopa za3, v9, v11
+  mopa za0, v12,   v14
+  mopa za1, v12,   v15
+  mopa za2, v13, v14
+  mopa za3, v13, v15
+  addi r10, r10, 256
+  addi r11, r11, 256
+  addi r12, r12, 1024
+  cmplt r15, r10, r13
+  bnz  r15, k_0_1
+  stza spm[65664], za0, 256
+  stza spm[65728], za1, 256
+  stza spm[69760], za2, 256
+  stza spm[69824], za3, 256
+  mul  r14, r6, r9
+  add  r14, r14, r2
+  shli r15, r7, 2
+  add  r14, r14, r15
+  dma.out spm[65536], r14, r9, 32, 256, t4
+  addi r6, r6, 32
+  ; ---- half 1: compute from A buffer 1, prefetch into 0 ----
+  addi r15, r6, 32
+  cmplt r14, r15, r3
+  mul  r15, r15, r14      ; clamp the tail prefetch to row-block 0
+  mul  r14, r15, r8
+  add  r14, r14, r0
+  dma.in spm[32768], r14, r8, 16, 512, t0, pack16
+  muli r15, r8, 16
+  add  r15, r14, r15
+  dma.in spm[40960], r15, r8, 16, 512, t1, pack16
+  wait 12           ; both A panels of buffer 1 landed
+  wait 32          ; C staging 1 free
+  ; -- output tile 0 of 2, reusing A buffer 1 --
+  zerza za0
+  zerza za1
+  zerza za2
+  zerza za3
+  movi r10, 49152
+  movi r11, 57344
+  movi r12, 0
+  movi r13, 57344
+k_1_0:
+  ldv  v0,   spm[0+r10]
+  ldv  v1, spm[0+r11]
+  ldv  v2, spm[0+r12]
+  ldv  v3, spm[64+r12]
+  ldv  v4,   spm[64+r10]
+  ldv  v5, spm[64+r11]
+  ldv  v6, spm[256+r12]
+  ldv  v7, spm[320+r12]
+  ldv  v8,   spm[128+r10]
+  ldv  v9, spm[128+r11]
+  ldv  v10, spm[512+r12]
+  ldv  v11, spm[576+r12]
+  ldv  v12,   spm[192+r10]
+  ldv  v13, spm[192+r11]
+  ldv  v14, spm[768+r12]
+  ldv  v15, spm[832+r12]
+  mopa za0, v0,   v2
+  mopa za1, v0,   v3
+  mopa za2, v1, v2
+  mopa za3, v1, v3
+  mopa za0, v4,   v6
+  mopa za1, v4,   v7
+  mopa za2, v5, v6
+  mopa za3, v5, v7
+  mopa za0, v8,   v10
+  mopa za1, v8,   v11
+  mopa za2, v9, v10
+  mopa za3, v9, v11
+  mopa za0, v12,   v14
+  mopa za1, v12,   v15
+  mopa za2, v13, v14
+  mopa za3, v13, v15
+  addi r10, r10, 256
+  addi r11, r11, 256
+  addi r12, r12, 1024
+  cmplt r15, r10, r13
+  bnz  r15, k_1_0
+  stza spm[73728], za0, 256
+  stza spm[73792], za1, 256
+  stza spm[77824], za2, 256
+  stza spm[77888], za3, 256
+  ; -- output tile 1 of 2, reusing A buffer 1 --
+  zerza za0
+  zerza za1
+  zerza za2
+  zerza za3
+  movi r10, 49152
+  movi r11, 57344
+  movi r12, 128
+  movi r13, 57344
+k_1_1:
+  ldv  v0,   spm[0+r10]
+  ldv  v1, spm[0+r11]
+  ldv  v2, spm[0+r12]
+  ldv  v3, spm[64+r12]
+  ldv  v4,   spm[64+r10]
+  ldv  v5, spm[64+r11]
+  ldv  v6, spm[256+r12]
+  ldv  v7, spm[320+r12]
+  ldv  v8,   spm[128+r10]
+  ldv  v9, spm[128+r11]
+  ldv  v10, spm[512+r12]
+  ldv  v11, spm[576+r12]
+  ldv  v12,   spm[192+r10]
+  ldv  v13, spm[192+r11]
+  ldv  v14, spm[768+r12]
+  ldv  v15, spm[832+r12]
+  mopa za0, v0,   v2
+  mopa za1, v0,   v3
+  mopa za2, v1, v2
+  mopa za3, v1, v3
+  mopa za0, v4,   v6
+  mopa za1, v4,   v7
+  mopa za2, v5, v6
+  mopa za3, v5, v7
+  mopa za0, v8,   v10
+  mopa za1, v8,   v11
+  mopa za2, v9, v10
+  mopa za3, v9, v11
+  mopa za0, v12,   v14
+  mopa za1, v12,   v15
+  mopa za2, v13, v14
+  mopa za3, v13, v15
+  addi r10, r10, 256
+  addi r11, r11, 256
+  addi r12, r12, 1024
+  cmplt r15, r10, r13
+  bnz  r15, k_1_1
+  stza spm[73856], za0, 256
+  stza spm[73920], za1, 256
+  stza spm[77952], za2, 256
+  stza spm[78016], za3, 256
+  mul  r14, r6, r9
+  add  r14, r14, r2
+  shli r15, r7, 2
+  add  r14, r14, r15
+  dma.out spm[73728], r14, r9, 32, 256, t5
+  addi r6, r6, 32
+  cmplt r15, r6, r3
+  bnz  r15, i_loop
+  wait 48          ; drain both C writebacks (t4|t5)
+  addi r7, r7, 64
+  cmplt r15, r7, r4
+  bnz  r15, j_loop
+  halt

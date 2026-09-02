@@ -1,0 +1,7 @@
+*.o
+tessera
+bench/smepeak
+bench/smcost
+bench/memhier
+bench/blas_ref
+.DS_Store

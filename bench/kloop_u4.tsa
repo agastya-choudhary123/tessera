@@ -1,0 +1,56 @@
+; inner-loop isolation, unroll=4, K=256, no DMA
+.args 6
+  arg r3, 3        ; reps
+  movi r6, 0
+outer:
+  zerza za0
+  zerza za1
+  zerza za2
+  zerza za3
+  movi r10, 0
+  movi r11, 16384
+  movi r12, 32768
+  movi r13, 16384
+k:
+  ldv  v0,   spm[0+r10]
+  ldv  v1, spm[0+r11]
+  ldv  v2, spm[0+r12]
+  ldv  v3, spm[64+r12]
+  ldv  v4,   spm[64+r10]
+  ldv  v5, spm[64+r11]
+  ldv  v6, spm[128+r12]
+  ldv  v7, spm[192+r12]
+  ldv  v8,   spm[128+r10]
+  ldv  v9, spm[128+r11]
+  ldv  v10, spm[256+r12]
+  ldv  v11, spm[320+r12]
+  ldv  v12,   spm[192+r10]
+  ldv  v13, spm[192+r11]
+  ldv  v14, spm[384+r12]
+  ldv  v15, spm[448+r12]
+  mopa za0, v0,   v2
+  mopa za1, v0,   v3
+  mopa za2, v1, v2
+  mopa za3, v1, v3
+  mopa za0, v4,   v6
+  mopa za1, v4,   v7
+  mopa za2, v5, v6
+  mopa za3, v5, v7
+  mopa za0, v8,   v10
+  mopa za1, v8,   v11
+  mopa za2, v9, v10
+  mopa za3, v9, v11
+  mopa za0, v12,   v14
+  mopa za1, v12,   v15
+  mopa za2, v13, v14
+  mopa za3, v13, v15
+  addi r10, r10, 256
+  addi r11, r11, 256
+  addi r12, r12, 512
+  cmplt r15, r10, r13
+  bnz  r15, k
+  stza spm[98304], za0, 128
+  addi r6, r6, 1
+  cmplt r15, r6, r3
+  bnz  r15, outer
+  halt

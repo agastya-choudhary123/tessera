@@ -1,0 +1,10 @@
+; V2: the tile shape does not fit the 128 KB scratchpad.
+; On a cache-based machine this "works" and silently thrashes; here it is a
+; compile-time error, which is the entire point of an explicit scratchpad.
+.args 6
+  arg r0, 0
+  arg r5, 5
+  muli r8, r5, 4
+  dma.in spm[131008], r0, r8, 16, 4096, t0
+  wait t0
+  halt

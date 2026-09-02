@@ -1,0 +1,11 @@
+; V3: reads the scratchpad while the DMA filling it is still in flight.
+; This is THE bug of hand-written accelerator code -- it produces stale data
+; nondeterministically, depending on how fast the DMA engine happened to be.
+.args 6
+  arg r0, 0
+  arg r5, 5
+  muli r8, r5, 4
+  dma.in spm[0], r0, r8, 16, 512, t0, pack16
+  ldv  v0, spm[0]          ; <-- no `wait t0` anywhere above this
+  mopa za0, v0, v0
+  halt

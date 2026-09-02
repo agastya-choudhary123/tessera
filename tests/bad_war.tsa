@@ -1,0 +1,12 @@
+; V3 (write-after-read): overwrites a staging buffer whose writeback DMA has
+; not retired. The classic double-buffering bug -- one buffer where two are
+; needed. Correct on a slow DMA engine, corrupt on a fast one.
+.args 6
+  arg r2, 2
+  arg r4, 4
+  muli r9, r4, 4
+  zerza za0
+  stza spm[1024], za0, 64
+  dma.out spm[1024], r2, r9, 16, 64, t2
+  stza spm[1024], za0, 64      ; <-- no `wait t2`
+  halt
